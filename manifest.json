@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "SuperTab",
+  "version": "3.1",
+  "description": "30 zakładek, tapeta, notatki, drag & drop.",
+  "chrome_url_overrides": { "newtab": "newtab.html" },
+  "options_page": "options.html",
+  "permissions": ["storage"],
+  "content_security_policy": {
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://www.google.com; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+  },
+  "icons": {
+    "16":  "icons/icon16.png",
+    "48":  "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nowa karta</title>
+<link rel="stylesheet" href="newtab.css">
+</head>
+<body>
+
+<!-- Sticky note corner -->
+<div id="noteCorner">
+  <button id="noteAddBtn" title="Dodaj notatkę">+</button>
+  <div id="noteCard" class="hidden">
+    <div id="noteHeader">
+      <span class="note-title" data-i18n="note_title">Notatka</span>
+      <div class="note-actions">
+        <button id="noteSaveBtn" title="Zapisz">✓</button>
+        <button id="noteDeleteBtn" title="Usuń notatkę">🗑</button>
+      </div>
+    </div>
+    <textarea id="noteText" data-i18n-ph="note_placeholder" placeholder="Wpisz notatkę…"></textarea>
+  </div>
+</div>
+
+<!-- Search -->
+<div class="search-wrap">
+  <div class="search-box">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+    </svg>
+    <input id="searchInput" type="text" data-i18n-ph="search_placeholder" placeholder="Szukaj w Google lub wpisz URL…" autofocus>
+  </div>
+</div>
+
+<!-- Grid -->
+<div class="grid" id="grid"></div>
+
+<!-- Toolbar — popupy WEWNĄTRZ żeby position:absolute działało -->
+<div id="toolbarWrap">
+  <div id="toolbarHandle" title="Pokaż/ukryj pasek">···</div>
+  <div class="toolbar" id="toolbar">
+    <button class="btn" id="editBtn" data-i18n="btn_edit">✏️ Edytuj</button>
+    <button class="btn" id="wallpaperBtn" data-i18n="btn_wallpaper">🖼️ Tapeta</button>
+    <button class="btn" id="optionsBtn" data-i18n="btn_options">⚙️ Opcje</button>
+    <button class="btn btn-info" id="infoBtn">ⓘ</button>
+    <button class="btn" id="resetBtn" data-i18n="btn_reset">↺ Reset</button>
+  </div>
+
+</div>
+
+<input type="file" id="wallpaperInput" accept="image/*" style="display:none">
+
+<!-- Popup backdrop -->
+<div id="popupBackdrop" class="hidden"></div>
+
+<!-- Options popup -->
+<div id="optionsPopup" class="popup hidden">
+  <div class="popup-header">
+    <span class="popup-title" data-i18n="opts_title">⚙️ Opcje</span>
+    <button class="popup-close" id="optionsClose">×</button>
+  </div>
+  <div class="popup-body">
+    <div class="pop-section-title" data-i18n="opts_theme_section">Motyw</div>
+    <div class="theme-picker" id="themePicker">
+      <button class="theme-btn" data-theme="default">
+        <span class="theme-preview theme-preview--default"></span>
+        <span data-i18n="opts_theme_default">Default</span>
+      </button>
+      <button class="theme-btn" data-theme="futuristic">
+        <span class="theme-preview theme-preview--futuristic"></span>
+        <span data-i18n="opts_theme_futuristic">Futuristic</span>
+      </button>
+      <button class="theme-btn" data-theme="dark">
+        <span class="theme-preview theme-preview--dark"></span>
+        <span data-i18n="opts_theme_dark">Dark</span>
+      </button>
+    </div>
+    <div class="pop-section-title" style="margin-top:10px" data-i18n="opts_color_section">Kolor podświetlenia zakładek</div>
+    <p class="pop-hint" data-i18n="opts_color_hint">Dwuklik na zakładce zaznacza ją ramką w wybranym kolorze.</p>
+    <div class="color-row">
+      <input type="color" id="popHighlightColor" value="#f59e0b">
+      <div class="color-presets" id="popPresets"></div>
+    </div>
+    <div class="pop-save-row">
+      <button class="btn-primary" id="popSaveBtn" data-i18n="opts_save">Zapisz</button>
+      <span class="saved-msg" id="popSavedMsg" data-i18n="opts_saved">Zapisano!</span>
+    </div>
+  </div>
+</div>
+
+<!-- Info popup -->
+<div id="infoPopup" class="popup hidden">
+  <div class="popup-header">
+    <span class="popup-title">SuperTab</span>
+    <div style="display:flex;align-items:center;gap:6px;">
+      <button class="lang-toggle" id="langToggle" title="Switch language">🇬🇧</button>
+      <button class="popup-close" id="infoClose">×</button>
+    </div>
+  </div>
+  <div class="popup-body info-body">
+    <p class="info-tagline" data-i18n="info_tagline">Twój nowy ekran startowy Chrome'a.</p>
+    <div class="info-divider"></div>
+    <p class="info-credit">made with ♥ by <strong>kozinek</strong></p>
+    <p class="info-license" data-i18n="info_license">Możesz używać i modyfikować tę wtyczkę dowolnie. Jeśli coś zmienisz i będziesz ją dalej udostępniać, podaj autora.</p>
+    <a class="kofi-btn" href="https://ko-fi.com/kozinek" target="_blank" rel="noopener">
+      ☕ <span data-i18n="info_kofi">Postaw kawę</span>
+    </a>
+  </div>
+</div>
+
+<!-- Tile modal -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <h3 id="modalTitle">Nowa zakładka</h3>
+
+    <div class="field">
+      <label data-i18n="modal_url">Adres URL</label>
+      <input id="inputUrl" type="text" placeholder="https://example.com">
+      <div class="url-error" id="urlError"></div>
+    </div>
+
+    <div class="field">
+      <label data-i18n="modal_icon_preview">Podgląd ikony</label>
+      <div class="favicon-preview" id="faviconPreview">
+        <span data-i18n="modal_icon_hint">Wpisz URL, by zobaczyć ikonę</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label data-i18n="modal_custom_icon">Własna ikona (PNG / ICO, opcjonalne)</label>
+      <div class="custom-icon-row">
+        <div class="custom-icon-preview" id="customIconPreview"></div>
+        <label class="btn btn-upload" for="customIconInput" data-i18n="modal_choose_file">Wybierz plik</label>
+        <button class="btn btn-icon-clear hidden" id="clearIconBtn" data-i18n="modal_clear_icon">✕ Usuń</button>
+      </div>
+      <input type="file" id="customIconInput" accept="image/png,image/x-icon,image/vnd.microsoft.icon,image/*" style="display:none">
+    </div>
+
+    <div class="field">
+      <label data-i18n="modal_name">Nazwa (opcjonalna)</label>
+      <input id="inputName" type="text" data-i18n-ph="modal_name_ph" placeholder="Moja strona">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" id="cancelBtn" data-i18n="modal_cancel">Anuluj</button>
+      <button class="btn-primary" id="saveBtn" data-i18n="modal_save">Zapisz</button>
+    </div>
+  </div>
+</div>
+
+<script src="newtab.js"></script>
+</body>
+</html>
