@@ -7,7 +7,7 @@
   "options_page": "options.html",
   "permissions": ["storage"],
   "content_security_policy": {
-    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://www.google.com; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    "extension_pages": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://www.google.com https://*.gstatic.com; connect-src 'none'; object-src 'none'; base-uri 'self'; form-action 'none'"
   },
   "icons": {
     "16":  "icons/icon16.png",

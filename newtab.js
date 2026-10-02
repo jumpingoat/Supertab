@@ -384,12 +384,15 @@ function render() {
       const fav = faviconUrl(tile_data.url);
       if (fav) {
         const img = document.createElement('img');
-        img.src = fav;
         img.alt = '';
+        // [FIX] onerror PRZED img.src — Chrome może pominąć event gdy obraz jest w cache'u
+        // z błędem lub gdy request jest blokowany; bez tego zostaje puste miejsce zamiast placeholder
         img.onerror = () => {
+          img.onerror = null; // zapobiegamy nieskończonej pętli
           imgWrap.innerHTML = '';
           imgWrap.appendChild(placeholderEl(tile_data.url));
         };
+        img.src = fav;
         imgWrap.appendChild(img);
       } else {
         imgWrap.appendChild(placeholderEl(tile_data.url));
@@ -415,6 +418,16 @@ function render() {
 
     tile.appendChild(iconWrap);
     tile.appendChild(label);
+
+    // Middle click — otwórz w nowym tabie
+    tile.addEventListener('auxclick', e => {
+      if (e.button !== 1) return;
+      if (e.target === del) return;
+      if (editMode) return;
+      e.preventDefault();
+      const { ok, url } = validateUrl(tile_data.url);
+      if (ok) window.open(url, '_blank', 'noopener');
+    });
 
     // Kliknięcia — single vs double
     let clickTimer = null;
@@ -914,6 +927,17 @@ document.getElementById('noteDeleteBtn').addEventListener('click', () => {
 noteText.addEventListener('input', saveNote);
 
 // ── Init ───────────────────────────────────────────────────────────────────────
+// [FIX] Reset inputów pliku przy starcie — Chrome session restore może przywrócić
+// ich stan (w tym "Wybierz plik / Nie wybrano pliku" widoczne na stronie)
+(function resetFileInputs() {
+  ['wallpaperInput', 'customIconInput'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      try { el.value = ''; } catch {}
+    }
+  });
+})();
+
 applyI18n();
 const savedWp = lsGet(WP_KEY);
 // [FIX M2] Walidacja białą listą MIME przed zastosowaniem tapety z localStorage
