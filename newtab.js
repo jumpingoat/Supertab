@@ -335,14 +335,12 @@ function sanitizeTile(raw) {
 function loadTiles(cb) {
   syncGet([TILES_KEY], res => {
     const data = res[TILES_KEY];
-    if (Array.isArray(data) && data.length > 0) {
-      // Sanityzuj każdy tile z storage
+    if (Array.isArray(data)) {
+      // Klucz istnieje w storage — użytkownik mógł celowo usunąć wszystkie zakładki
       tiles = data.slice(0, MAX).map(sanitizeTile).filter(Boolean);
-      if (tiles.length === 0) {
-        tiles = JSON.parse(JSON.stringify(DEFAULT_TILES));
-        syncSet({ [TILES_KEY]: tiles });
-      }
+      // Nie przywracamy domyślnych — pusta tablica to świadomy wybór
     } else {
+      // Klucz nie istnieje w ogóle — pierwsze uruchomienie
       tiles = JSON.parse(JSON.stringify(DEFAULT_TILES));
       syncSet({ [TILES_KEY]: tiles });
     }

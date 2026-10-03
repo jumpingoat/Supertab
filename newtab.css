@@ -491,11 +491,12 @@ body.edit-mode .tile:not(.tile-add) .tile-icon { animation: wiggle .45s ease inf
   font-family: inherit;
   font-size: 13px;
   outline: none;
-  background: #fafaf9;
+  background: var(--surface);
   color: var(--text);
   transition: border-color .15s;
 }
-.modal input[type=text]:focus { border-color: var(--accent); background: #fff; }
+.modal input[type=text]::placeholder { color: var(--muted); }
+.modal input[type=text]:focus { border-color: var(--accent); background: var(--surface); }
 .modal input.invalid { border-color: var(--danger); }
 .url-error { font-size: 11px; color: var(--danger); min-height: 14px; }
 
