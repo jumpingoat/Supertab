@@ -7,16 +7,34 @@
 ## Features
 
 - **30-tile bookmark grid** — up to 30 shortcuts displayed as icon tiles. Click to navigate, double-click to highlight with a colored border
+
 - **Drag & drop reordering** — reorganize tiles in Edit mode
+
 - **Custom icons** — upload your own PNG or ICO icon per bookmark
+
 - **Wallpaper** — set any image as the background (stored locally, never uploaded anywhere)
+
 - **Sticky note** — a quick-access note widget in the top-right corner, auto-saved
+
 - **Google Search bar** — search or navigate directly from the new tab page
+
 - **Themes** — choose between Default (light), Futuristic (dark neon) and Dark (minimal dark) from the Options popup. The theme is saved and synced across devices
+
 - **Highlight color** — choose the color used for double-click tile markers
+
 - **PL / EN language toggle** — switch the interface language at any time
+
 - **Toolbar show/hide** — collapse the bottom toolbar when you don't need it
+
 - **Reset to defaults** — restore the original 10 bookmarks
+
+  
+
+  ## ATENTION 
+
+  Wallpapers should be less than 5MB and proper in size for a given screen resolution. For now the plugin doesn't crop by itself.
+
+  
 
 ## Privacy
 
