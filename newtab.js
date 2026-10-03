@@ -8,6 +8,10 @@ const OPTS_KEY   = 'supertab_options';
 const TB_KEY     = 'supertab_toolbar';
 const LANG_KEY   = 'supertab_lang';
 const THEME_KEY  = 'supertab_theme';
+const ICONS_KEY  = 'supertab_icons';   // chrome.storage.local: { iconId: dataUrl }
+const ICON_ID_RE = /^[a-z0-9]{12,32}$/;
+const ICON_SIZE  = 64;                 // ikony skalowane do max 64×64 px
+const MAX_URL_LEN = 2048;
 
 const ALLOWED_THEMES = ['default', 'futuristic', 'dark'];
 const MAX       = 30;
@@ -27,19 +31,38 @@ function syncGet(keys, cb) {
     cb(res);
   }
 }
-function syncSet(obj, cb) {
+// cb(err) — err to komunikat błędu albo null
+function storageSet(area, obj, cb) {
   if (typeof chrome !== 'undefined' && chrome.storage) {
-    chrome.storage.sync.set(obj, () => {
-      if (chrome.runtime.lastError) {
-        console.warn('storage.set error:', chrome.runtime.lastError.message);
-      }
-      if (cb) cb();
+    chrome.storage[area].set(obj, () => {
+      const err = chrome.runtime.lastError ? chrome.runtime.lastError.message : null;
+      if (err) console.warn('storage.' + area + '.set error:', err);
+      if (cb) cb(err);
     });
   } else {
+    let err = null;
     Object.entries(obj).forEach(([k, v]) => {
-      try { localStorage.setItem(k, JSON.stringify(v)); } catch {}
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { err = String(e); }
     });
-    if (cb) cb();
+    if (cb) cb(err);
+  }
+}
+function syncSet(obj, cb) { storageSet('sync', obj, cb); }
+function localSet(obj, cb) { storageSet('local', obj, cb); }
+
+// [FIX M7] Ikony trzymamy w chrome.storage.local (limit 10 MB), bo sync ma limit 8 KB na klucz
+function localGet(keys, cb) {
+  if (typeof chrome !== 'undefined' && chrome.storage) {
+    chrome.storage.local.get(keys, data => {
+      if (chrome.runtime.lastError) { console.warn('storage.local.get error:', chrome.runtime.lastError); }
+      cb(data || {});
+    });
+  } else {
+    const res = {};
+    keys.forEach(k => {
+      try { const v = localStorage.getItem(k); res[k] = v ? JSON.parse(v) : null; } catch {}
+    });
+    cb(res);
   }
 }
 function lsGet(key)      { try { return localStorage.getItem(key); }   catch { return null; } }
@@ -210,6 +233,7 @@ function normalizeUrl(raw) {
 function validateUrl(raw) {
   const norm = normalizeUrl(raw);
   if (!norm) return { ok: false, msg: t('url_error') };
+  if (norm.length > MAX_URL_LEN) return { ok: false, msg: t('url_error2') };
   try {
     const parsed = new URL(norm);
     // Whitelist protokołów
@@ -218,6 +242,10 @@ function validateUrl(raw) {
     }
     // Hostname nie może być pusty
     if (!parsed.hostname) {
+      return { ok: false, msg: t('url_error2') };
+    }
+    // [FIX L1] Odrzucamy dane logowania w URL (np. google.com@evil.com prowadzi na evil.com)
+    if (parsed.username || parsed.password) {
       return { ok: false, msg: t('url_error2') };
     }
     return { ok: true, url: norm };
@@ -306,6 +334,22 @@ function loadOptions(cb) {
   });
 }
 
+// Zmiany opcji z innej karty lub ze strony opcji (walidowane jak przy wczytywaniu)
+if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'sync' || !changes[OPTS_KEY]) return;
+    const nv = changes[OPTS_KEY].newValue;
+    if (!nv || typeof nv !== 'object') return;
+    if (typeof nv.highlightColor === 'string' && /^#[0-9a-f]{6}$/i.test(nv.highlightColor)) {
+      options.highlightColor = nv.highlightColor;
+      document.documentElement.style.setProperty('--highlight-color', options.highlightColor);
+    }
+    if (typeof nv.theme === 'string' && ALLOWED_THEMES.includes(nv.theme)) {
+      applyTheme(nv.theme);
+    }
+  });
+}
+
 function saveOptions() {
   syncSet({ [OPTS_KEY]: { highlightColor: options.highlightColor, theme: options.theme } });
   document.documentElement.style.setProperty('--highlight-color', options.highlightColor);
@@ -321,38 +365,82 @@ function sanitizeTile(raw) {
   if (!ok) return null;
   // Nazwa — string, max 100 znaków
   const name = typeof raw.name === 'string' ? raw.name.slice(0, 100) : '';
-  // CustomIcon — tylko bezpieczne data URI
+  // CustomIcon — tylko bezpieczne data URI (starsze wersje trzymały ikonę w sync)
   const customIcon = (typeof raw.customIcon === 'string' && isSafeDataUri(raw.customIcon))
     ? raw.customIcon : undefined;
+  // iconId — identyfikator ikony w chrome.storage.local, ścisły format
+  const iconId = (typeof raw.iconId === 'string' && ICON_ID_RE.test(raw.iconId))
+    ? raw.iconId : undefined;
   // highlighted — tylko boolean
   const highlighted = raw.highlighted === true;
   const result = { url, name };
   if (customIcon) result.customIcon = customIcon;
+  if (iconId) result.iconId = iconId;
   if (highlighted) result.highlighted = true;
   return result;
 }
 
+function newIconId() {
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function loadTiles(cb) {
   syncGet([TILES_KEY], res => {
-    const data = res[TILES_KEY];
-    if (Array.isArray(data)) {
-      // Klucz istnieje w storage — użytkownik mógł celowo usunąć wszystkie zakładki
-      tiles = data.slice(0, MAX).map(sanitizeTile).filter(Boolean);
-      // Nie przywracamy domyślnych — pusta tablica to świadomy wybór
-    } else {
-      // Klucz nie istnieje w ogóle — pierwsze uruchomienie
-      tiles = JSON.parse(JSON.stringify(DEFAULT_TILES));
-      syncSet({ [TILES_KEY]: tiles });
-    }
-    cb();
+    localGet([ICONS_KEY], localRes => {
+      const data  = res[TILES_KEY];
+      const store = localRes[ICONS_KEY];
+      const icons = (store && typeof store === 'object' && !Array.isArray(store)) ? store : {};
+      let migrate = false;
+
+      if (Array.isArray(data)) {
+        // Klucz istnieje — pusta tablica to świadomy wybór, nie przywracamy domyślnych
+        tiles = data.slice(0, MAX).map(sanitizeTile).filter(Boolean);
+        tiles.forEach(tile => {
+          if (tile.customIcon) {
+            // Migracja ze starej wersji: ikona leżała w sync, przenosimy ją do local
+            if (!tile.iconId) tile.iconId = newIconId();
+            migrate = true;
+          } else if (tile.iconId) {
+            const icon = Object.prototype.hasOwnProperty.call(icons, tile.iconId) ? icons[tile.iconId] : null;
+            if (typeof icon === 'string' && isSafeDataUri(icon)) tile.customIcon = icon;
+            // Brak ikony w local (np. dodana na innym komputerze): pokazujemy favicon,
+            // ale iconId zostaje, żeby zapis tutaj nie zerwał ikony na tamtym komputerze
+          }
+        });
+      } else {
+        // Klucz nie istnieje — pierwsze uruchomienie
+        tiles = JSON.parse(JSON.stringify(DEFAULT_TILES));
+        migrate = true;
+      }
+      if (migrate) saveTiles();
+      cb();
+    });
   });
 }
 
+// [FIX M7] Do sync trafiają tylko lekkie dane (url, nazwa, iconId), ikony do local
 function saveTiles() {
-  syncSet({ [TILES_KEY]: tiles }, () => {
-    if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError) {
-      console.warn(t('storage_error'), chrome.runtime.lastError.message);
+  const syncTiles = [];
+  const icons = Object.create(null);
+  tiles.forEach(tile => {
+    const entry = { url: tile.url, name: tile.name || '' };
+    if (tile.highlighted) entry.highlighted = true;
+    if (tile.customIcon && isSafeDataUri(tile.customIcon)) {
+      if (!tile.iconId) tile.iconId = newIconId();
+      entry.iconId = tile.iconId;
+      icons[tile.iconId] = tile.customIcon;
+    } else if (tile.iconId) {
+      entry.iconId = tile.iconId; // ikona istnieje tylko na innym komputerze
     }
+    syncTiles.push(entry);
+  });
+  // Najpierw ikony, potem zakładki; zapis całej mapy usuwa ikony usuniętych zakładek
+  localSet({ [ICONS_KEY]: icons }, errLocal => {
+    syncSet({ [TILES_KEY]: syncTiles }, errSync => {
+      if (errLocal || errSync) alert(t('storage_error'));
+    });
   });
 }
 
@@ -506,9 +594,12 @@ function render() {
 // ── Modal ──────────────────────────────────────────────────────────────────────
 let previewDebounce;
 
+let iconChanged = false; // czy w tym otwarciu modala wgrano lub usunięto ikonę
+
 function openModal(index) {
   pendingIndex = index;
   customIconDataUrl = null;
+  iconChanged = false;
 
   if (index !== null && tiles[index] && tiles[index].customIcon) {
     // Waliduj ponownie przy otwarciu modala
@@ -531,6 +622,7 @@ function openModal(index) {
 
 function closeModal() {
   document.getElementById('overlay').classList.remove('open');
+  iconLoadToken++;
   pendingIndex = null;
   customIconDataUrl = null;
   document.getElementById('customIconInput').value = '';
@@ -595,15 +687,45 @@ document.getElementById('inputUrl').addEventListener('input', e => {
   e.target.classList.remove('invalid');
 });
 
+// [FIX M7] Skalowanie ikony do max 64×64 i ponowne kodowanie jako PNG.
+// Mały rozmiar w storage, a przy okazji z pliku zostaje tylko czysty obraz
+// (bez metadanych i ewentualnych danych doklejonych za obrazem).
+const MAX_ICON_FILE = 2 * 1024 * 1024;
+
+function downscaleIcon(dataUrl, cb) {
+  const img = new Image();
+  img.onload = () => {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) { cb(null); return; }
+    const scale = Math.min(1, ICON_SIZE / Math.max(w, h));
+    const cw = Math.max(1, Math.round(w * scale));
+    const ch = Math.max(1, Math.round(h * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, cw, ch);
+    let out = null;
+    try { out = canvas.toDataURL('image/png'); } catch { out = null; }
+    cb(out && isSafeDataUri(out) ? out : null);
+  };
+  img.onerror = () => cb(null);
+  img.src = dataUrl;
+}
+
+let iconLoadToken = 0; // chroni przed wynikiem z poprzedniego otwarcia modala
+
 // [FIX H3 + M4] Walidacja MIME i rozszerzenia przy wyborze pliku ikony
 document.getElementById('customIconInput').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-  if (!validateImageFile(file)) {
+  if (!validateImageFile(file) || file.size > MAX_ICON_FILE) {
     alert(t('icon_type_error'));
     e.target.value = '';
     return;
   }
+  const token = ++iconLoadToken;
   const reader = new FileReader();
   reader.onload = ev => {
     const result = ev.target.result;
@@ -613,14 +735,21 @@ document.getElementById('customIconInput').addEventListener('change', e => {
       e.target.value = '';
       return;
     }
-    customIconDataUrl = result;
-    updateCustomIconPreview(customIconDataUrl);
+    downscaleIcon(result, small => {
+      if (token !== iconLoadToken) return;
+      if (!small) { alert(t('icon_type_error')); e.target.value = ''; return; }
+      customIconDataUrl = small;
+      iconChanged = true;
+      updateCustomIconPreview(customIconDataUrl);
+    });
   };
   reader.readAsDataURL(file);
 });
 
 document.getElementById('clearIconBtn').addEventListener('click', () => {
+  iconLoadToken++;
   customIconDataUrl = null;
+  iconChanged = true;
   document.getElementById('customIconInput').value = '';
   updateCustomIconPreview(null);
 });
@@ -642,12 +771,17 @@ document.getElementById('saveBtn').addEventListener('click', () => {
   // Sanityzuj nazwę
   const name = document.getElementById('inputName').value.trim().slice(0, 100);
   const entry = { url, name };
+  const old = (pendingIndex !== null && tiles[pendingIndex]) ? tiles[pendingIndex] : null;
   // Ikona — tylko po walidacji
   if (customIconDataUrl && isSafeDataUri(customIconDataUrl)) {
     entry.customIcon = customIconDataUrl;
   }
+  // Ikona bez zmian: zachowujemy iconId (nowa ikona dostanie nowe id w saveTiles)
+  if (!iconChanged && old && old.iconId) {
+    entry.iconId = old.iconId;
+  }
   // Zachowaj flagę highlighted
-  if (pendingIndex !== null && tiles[pendingIndex] && tiles[pendingIndex].highlighted) {
+  if (old && old.highlighted) {
     entry.highlighted = true;
   }
   if (pendingIndex !== null) {
@@ -756,6 +890,8 @@ document.getElementById('wallpaperInput').addEventListener('change', e => {
 document.querySelectorAll('.theme-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     applyTheme(btn.dataset.theme);
+    // Motyw zapisujemy od razu, bez czekania na przycisk "Zapisz"
+    saveOptions();
   });
 });
 
@@ -925,8 +1061,8 @@ document.getElementById('noteDeleteBtn').addEventListener('click', () => {
 noteText.addEventListener('input', saveNote);
 
 // ── Init ───────────────────────────────────────────────────────────────────────
-// [FIX] Reset inputów pliku przy starcie — Chrome session restore może przywrócić
-// ich stan (w tym "Wybierz plik / Nie wybrano pliku" widoczne na stronie)
+// Reset inputów pliku przy starcie (defensywnie; widoczny input był skutkiem
+// zablokowanego przez CSP style="display:none", teraz ukrywa go klasa CSS)
 (function resetFileInputs() {
   ['wallpaperInput', 'customIconInput'].forEach(id => {
     const el = document.getElementById(id);

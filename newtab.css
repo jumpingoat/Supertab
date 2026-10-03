@@ -2,7 +2,8 @@
    Używamy systemowego font-stack zamiast DM Sans */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-/* [FIX] Ukryte inputy pliku — !important zapobiega przywróceniu przez Chrome session restore */
+/* [FIX L2] Ukryte inputy pliku. Atrybut style="display:none" był blokowany przez CSP
+   (style-src 'self' nie pozwala na style inline), dlatego ukrywamy je klasą */
 .file-input-hidden {
   display: none !important;
   visibility: hidden !important;
@@ -12,6 +13,10 @@
   opacity: 0 !important;
   pointer-events: none !important;
 }
+
+/* Dawne style inline z newtab.html (blokowane przez CSP) */
+.pop-section-spaced { margin-top: 10px; }
+.popup-header-actions { display: flex; align-items: center; gap: 6px; }
 
 /* ── THEMES ── */
 /* Default — jasny, neutralny */

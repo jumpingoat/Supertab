@@ -78,14 +78,25 @@ syncGet([OPTS_KEY], res => {
 });
 
 // Save
+const ALLOWED_THEMES = ['default', 'futuristic', 'dark'];
+
 document.getElementById('saveBtn').addEventListener('click', () => {
   const rawColor = document.getElementById('highlightColor').value;
   // [FIX S1] Walidacja formatu hex przed zapisem — ochrona przed manipulacją DOM
   if (!/^#[0-9a-f]{6}$/i.test(rawColor)) return;
   options.highlightColor = rawColor;
-  syncSet({ [OPTS_KEY]: options }, () => {
-    const msg = document.getElementById('savedMsg');
-    msg.classList.add('show');
-    setTimeout(() => msg.classList.remove('show'), 2000);
+  // [FIX] Odczyt tuż przed zapisem i podmiana tylko koloru. Wcześniej zapis
+  // samego { highlightColor } kasował motyw ustawiony na nowej karcie.
+  syncGet([OPTS_KEY], res => {
+    const toSave = { highlightColor: rawColor };
+    const cur = res[OPTS_KEY];
+    if (cur && typeof cur === 'object' && typeof cur.theme === 'string' && ALLOWED_THEMES.includes(cur.theme)) {
+      toSave.theme = cur.theme;
+    }
+    syncSet({ [OPTS_KEY]: toSave }, () => {
+      const msg = document.getElementById('savedMsg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2000);
+    });
   });
 });
